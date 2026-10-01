@@ -1,0 +1,50 @@
+# ---- Documents kept local only (not pushed) ----
+Programmers_Guide.md
+DART-PRD.md
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Model, training data and run outputs (too large for GitHub; 100 MB file limit) ----
+artifacts/
+runs/
+assets/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.onnx
+
+# ---- Node / React front end ----
+node_modules/
+Mark-2/frontend/dist/
+*.tsbuildinfo
+vite.config.*.timestamp-*
+
+# ---- Secrets and local configuration ----
+.env
+.env.*
+!.env.example
+.claude/
+
+# ---- Logs, caches, temporary files ----
+*.log
+*.tmp
+.cache/
+
+# ---- Editors and operating systems ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,7 @@
+# Web API (Mark-2). The model stack (torch, transformers) comes from the project's requirements-lock.txt.
+fastapi>=0.115
+uvicorn[standard]>=0.30
+pymongo>=4.9
+# tests
+pytest
+httpx
