@@ -233,17 +233,18 @@ Type `quit` at any prompt to exit.
 
 ## Mark-2 — web app (React + FastAPI + MongoDB)
 
-The model as a standalone application. One query box (context and question together), one options box, and a result showing the decision, confidence, ranked probabilities, model latency and round-trip time.
+The model as a standalone application with two pages: a **landing page** at `/` and the **playground** at `/playground/`. In the playground you enter an optional context and up to 10 questions, each with its own options (previewed as chips while you type); the result shows, per question, the decision, a confidence ring and the ranked probabilities, plus the question count, forward passes, model latency and round-trip time. The design follows `Mark-2/Design components/` (brand foundations, landing page, playground).
 
 ### Specification
 
 | Part | Details |
 |---|---|
-| Frontend | Vite + React + TypeScript, plain CSS, DART branding; the dev server proxies `/api` to the backend |
+| Frontend | Vite + React + TypeScript, plain CSS. Two Vite entries: `index.html` (landing, `src/landing/`) and `playground/index.html` (`src/playground/`). Brand tokens (Void, Panel, Wire, Fog, Paper, Signal; Unbounded / Geist / Geist Mono) and the mark live in `src/brand/`. The dev server proxies `/api` to the backend |
 | Backend | FastAPI; loads the model once at startup (GPU if available, else CPU); inference runs behind a lock |
 | Database | MongoDB collection `dart.decisions`: stores every query, options, the model's ranked output, confidence, latency, model version and optional user feedback (for future training) |
-| Input | `query`: the whole text, context and question together (1 to 2,000 characters). `options`: a list or a range. |
-| Output | the same structure as Mark-1, as JSON: ranked options with probabilities, decision, confidence, `latency_ms` |
+| Input | `context`: optional shared text (up to 2,000 characters). `questions`: 1 to 10 items of `{query, options}` (query up to 500 characters; options as text, a list `yes, no` or a range `0-5`, or as a JSON list `["yes", "no"]`). Context plus any one question must fit in 256 tokens. |
+| Output | one decision per question, in order: ranked options with probabilities, decision, confidence; plus `latency_ms` for the whole request |
+| Parallel decisions | with a context and enough questions, the context is read once for all of them (`dart.parallel`). That pass is not CUDA-graphed (about 150 ms flat on the RTX 3050 vs about 25 ms per graphed question), so on a GPU it is used from 6 questions; below that each question runs on the fast path. On CPU it is used from 2. `parallel` in the response says which path ran; the decisions are the same either way. |
 | Safety | per-client rate limit, CORS allow-list, input length caps, clear JSON errors, no IP addresses stored, database outage never blocks an answer (30-second circuit breaker) |
 
 **Options syntax**
@@ -263,9 +264,11 @@ A range may have at most 12 values; otherwise the API explains which `step` to a
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/health` | `{status, model_loaded, device, model_version}` |
-| `POST /api/decide` | body `{query, options}`; returns `id`, `model`, `decisions[0] {id, ranked[{option, probability}], decision, confidence}`, `latency_ms`, `options` (resolved), `options_kind`, `stored` |
-| `POST /api/decisions/{id}/feedback` | body `{correct_option}` (must be one of the decision's options); saves the label for training |
+| `GET /api/health` | `{status, model_loaded, device, model_version, parallel_min_questions}`; the playground uses the last one to say whether a request will run as one parallel pass |
+| `POST /api/decide` | body `{context?, questions: [{query, options}, ...]}`; returns `model`, `decisions[] {id, ranked[{option, probability}], decision, confidence, options (resolved), options_kind, record_id}`, `latency_ms`, `parallel`, `stored` |
+| `POST /api/decisions/{record_id}/feedback` | body `{correct_option}` (must be one of that question's options); saves the label for training |
+
+Each question is stored as its own record (with the shared `context` and a `group_id` linking questions asked together), so the export keeps shared-context groups together.
 
 Interactive API docs are served at `/docs` while the backend runs.
 
@@ -283,7 +286,7 @@ Interactive API docs are served at `/docs` while the backend runs.
    npm install
    npm run dev
    ```
-   Open http://localhost:5173.
+   Open http://localhost:5173 (landing page) or http://localhost:5173/playground/. Set `VITE_CONTACT_EMAIL` to turn the landing page's access button into a "Request API access" email link; without it the button opens the playground.
 
 Settings (environment variables, all optional):
 
@@ -291,6 +294,7 @@ Settings (environment variables, all optional):
 |---|---|---|
 | `DART_MODEL_DIR` | `artifacts/dart_v1.0` | exported model folder |
 | `DART_DEVICE` | auto (`cuda` if available) | `cuda` or `cpu` |
+| `DART_DTYPE` | `float32` on CPU, the exported `float16` on GPU | model precision; float16 on CPU is about 5x slower (4.6 s vs 0.87 s per question with 2 threads) |
 | `MONGODB_URI` / `MONGODB_DB` | `mongodb://localhost:27017` / `dart` | database |
 | `CORS_ORIGINS` | `http://localhost:5173` | comma-separated allowed origins |
 | `RATE_LIMIT_PER_MINUTE` | `60` | per client; `0` turns it off |

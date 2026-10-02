@@ -1,6 +1,7 @@
 # ---- Documents kept local only (not pushed) ----
 Programmers_Guide.md
 DART-PRD.md
+CLAUDE.md
 
 # ---- Python ----
 .venv/
@@ -28,6 +29,7 @@ assets/
 # ---- Node / React front end ----
 node_modules/
 Mark-2/frontend/dist/
+Mark-2/frontend/coverage/
 *.tsbuildinfo
 vite.config.*.timestamp-*
 

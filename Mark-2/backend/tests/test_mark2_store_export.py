@@ -96,6 +96,14 @@ def test_only_labelled_records_become_training_rows():
     assert row["source"] == "mark2_user" and row["decision_type"] == "categorical" and validate_row(row) is None
 
 
+def test_a_shared_context_record_keeps_its_context_and_group():
+    record = {"_id": "1", **RECORD, "context": "Tony lives in England.", "group_id": "g1",
+              "feedback": {"correct_option": "a"}}
+    rows, _ = build_rows([record])
+    assert rows[0]["context"] == "Tony lives in England." and rows[0]["group_id"] == "g1"
+
+
 def test_unlabeled_lists_the_records_without_feedback():
     records = [{"_id": "1", **RECORD, "feedback": {"correct_option": "b"}}, {"_id": "2", **RECORD, "feedback": None}]
-    assert unlabeled(records) == [{"id": "2", "query": "Pick one", "options": ["a", "b"], "model_decision": "a"}]
+    assert unlabeled(records) == [{"id": "2", "context": "", "query": "Pick one", "options": ["a", "b"],
+                                   "model_decision": "a"}]

@@ -40,7 +40,8 @@ def build_rows(records):
             continue
         row = make_row(source=SOURCE, decision_type=infer_decision_type(options), query=record["query"],
                        options=options, label=options.index(feedback["correct_option"]),
-                       subtopic="user input", slice_=DEFAULT_SLICE)
+                       subtopic="user input", slice_=DEFAULT_SLICE, context=record.get("context", ""),
+                       group_id=record.get("group_id", ""))
         row["id"] = f"{SOURCE}_{record['_id']}"
         if validate_row(row) is not None:
             skipped += 1
@@ -51,5 +52,6 @@ def build_rows(records):
 
 def unlabeled(records):
     """Stored decisions nobody has labelled yet, in a small form for later labelling."""
-    return [{"id": str(r["_id"]), "query": r["query"], "options": r["options"], "model_decision": r["decision"]}
+    return [{"id": str(r["_id"]), "context": r.get("context", ""), "query": r["query"], "options": r["options"],
+             "model_decision": r["decision"]}
             for r in records if not r.get("feedback")]

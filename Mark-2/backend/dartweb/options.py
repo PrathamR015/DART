@@ -1,4 +1,4 @@
-"""Turns the options field into a list of option strings: a comma/pipe list, or a numeric range.
+"""Turns the options field into a list of option strings: a comma/pipe list, a numeric range, or a JSON list.
 
 Ranges:  0-5   0 to 5   0..5   0-5 step 0.5   -1 to 1
 Integers by default. Decimal when an endpoint or the step has a decimal point. Without a step, the step is
@@ -39,7 +39,10 @@ def _check_count(options):
 
 def _parse_list(text):
     separator = "|" if "|" in text else ","
-    options = [part.strip() for part in text.split(separator) if part.strip()]
+    return _checked_list([part.strip() for part in text.split(separator) if part.strip()])
+
+
+def _checked_list(options):
     _check_count(options)
     if any(len(option) > MAX_OPTION_LENGTH for option in options):
         raise OptionsError(f"each option must be at most {MAX_OPTION_LENGTH} characters")
@@ -70,11 +73,19 @@ def _suggest_step(start, end):
     span = end - start
     for candidate in (Decimal("0.25"), Decimal("0.5"), Decimal(1), Decimal(2), Decimal(5), Decimal(10), Decimal(50)):
         if span / candidate + 1 <= MAX_OPTIONS:
-            return candidate.normalize()
-    return span.normalize()
+            return _plain(candidate)
+    return _plain(span)
+
+
+def _plain(number):
+    """10 as '10' and 0.50 as '0.5' (normalize() alone would give '1E+1')."""
+    return format(number.normalize(), "f")
 
 
 def parse_options(text):
+    """text: the options as typed (a list or a range), or an explicit list of option strings."""
+    if isinstance(text, (list, tuple)):
+        return _checked_list([str(option).strip() for option in text if str(option).strip()])
     text = (text or "").strip()
     if not text:
         raise OptionsError("enter the options, for example 'yes, no' or a range like '0-5'")

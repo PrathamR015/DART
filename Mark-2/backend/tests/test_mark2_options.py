@@ -100,3 +100,20 @@ def test_text_that_only_looks_like_a_range_is_treated_as_a_list_item():
     with pytest.raises(OptionsError):  # one item only
         parse_options("well-known")
     assert values("well-known, lesser-known") == ["well-known", "lesser-known"]
+
+
+@pytest.mark.parametrize("text,step", [("0-100", "10"), ("0.0-5.0", "0.5"), ("0-20", "2")])
+def test_suggested_step_is_written_plainly(text, step):
+    with pytest.raises(OptionsError, match=f"'{text} step {step}'"):
+        parse_options(text)
+
+
+def test_an_explicit_list_is_used_as_given_after_trimming():
+    parsed = parse_options([" hospital ", "airport", "", "school, bank"])
+    assert parsed.options == ["hospital", "airport", "school, bank"] and parsed.kind == "list"
+
+
+@pytest.mark.parametrize("items", [["only"], ["a", "A"], [], [str(i) for i in range(13)], ["a", "x" * 101]])
+def test_bad_explicit_lists_are_rejected(items):
+    with pytest.raises(OptionsError):
+        parse_options(items)

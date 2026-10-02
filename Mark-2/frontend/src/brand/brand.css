@@ -1,0 +1,241 @@
+/* D.A.R.T. brand foundations: colour, type and the interface atoms shared by every page.
+   Signal marks one thing per view: the winning option, the primary action, the dot. Everything else is grey. */
+
+:root {
+  /* Core palette */
+  --void: #0a0b0d; /* ground */
+  --panel: #111317; /* surfaces */
+  --wire: #2e333b; /* lines, tracks */
+  --fog: #a0a7b1; /* secondary text */
+  --paper: #edeff2; /* primary text */
+  --signal: #c8ff3d; /* the decision */
+  --signal-hover: #e2ff9a;
+  --chalk: #eef0ea; /* the mark on paper */
+
+  /* Greys between the core colours */
+  --ink-soft: #c9ced5; /* quiet primary text */
+  --muted: #858c96; /* captions, meta */
+  --dim: #6f7680; /* ranks, placeholders */
+  --bar-dim: #4a505a; /* losing bars, faded headline */
+  --mark-dim: #3a404a; /* the empty-state mark */
+  --line: #1f2329; /* card borders */
+  --line-soft: #1c1f24; /* section rules */
+  --edge: #23272e; /* raised card and pill borders */
+  --well: #0d0f12; /* inputs, code */
+  --well-edge: #262a31;
+  --well-hover: #353a43;
+  --band: #0f1114; /* alternate section ground */
+  --chip: #181b20;
+  --track: #1a1d22;
+  --hover: #1c2026;
+  --warn: #ffb86b;
+
+  /* Type */
+  --font-display: 'Unbounded', ui-sans-serif, sans-serif; /* headlines, the decision, the wordmark */
+  --font-ui: 'Geist', ui-sans-serif, system-ui, sans-serif; /* body, labels, inputs, buttons */
+  --font-mono: 'Geist Mono', ui-monospace, monospace; /* probabilities, timings, ids, eyebrows */
+
+  color-scheme: dark;
+  color: var(--paper);
+  background: var(--void);
+  font-family: var(--font-ui);
+}
+
+body {
+  margin: 0;
+  background: var(--void);
+}
+
+a {
+  color: var(--signal);
+}
+
+a:hover {
+  color: var(--signal-hover);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--signal);
+}
+
+.display {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+/* Wordmark: always four dots, always Signal on dark */
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.wordmark .dot {
+  color: var(--signal);
+}
+
+.brand-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--paper);
+  text-decoration: none;
+}
+
+.brand-link:hover {
+  color: var(--paper);
+}
+
+/* Buttons */
+.btn-primary,
+.btn-ghost {
+  box-sizing: border-box;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 12px;
+  font: 600 15px var(--font-ui);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn-primary {
+  padding: 0 26px;
+  border: 0;
+  background: var(--signal);
+  color: var(--void);
+  transition:
+    filter 0.15s,
+    transform 0.1s;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.07);
+  color: var(--void);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
+}
+
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.btn-ghost {
+  padding: 0 22px;
+  border: 1px solid var(--wire);
+  background: transparent;
+  color: var(--paper);
+  font-weight: 500;
+  transition: border-color 0.15s;
+}
+
+.btn-ghost:hover {
+  border-color: var(--signal);
+  color: var(--paper);
+}
+
+/* Chip: one option, an id, a small value */
+.chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--chip);
+  border: 1px solid var(--well-edge);
+  border-radius: 6px;
+  padding: 5px 9px;
+}
+
+/* Status pill with a dot */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fog);
+}
+
+.pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--signal);
+}
+
+.pill-dot.is-off {
+  background: var(--bar-dim);
+}
+
+/* Probability bars: the winner in Signal, the rest in grey */
+.bar-track {
+  display: block;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--bar-dim);
+}
+
+.bar-fill.is-top {
+  background: var(--signal);
+}
+
+/* Dotted ground used behind the hero and the playground */
+.dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgba(237, 239, 242, 0.07) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Link to the source repository: the GitHub mark plus a label, quiet until hovered */
+.repo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fog);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.repo-link:hover {
+  color: var(--paper);
+}

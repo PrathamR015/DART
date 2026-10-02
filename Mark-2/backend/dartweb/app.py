@@ -8,6 +8,7 @@ import logging
 import sys
 import threading
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,6 +28,16 @@ from dartweb.store import MongoStore  # noqa: E402
 
 logger = logging.getLogger("dartweb")
 STORE_RETRY_SECONDS = 30
+PARALLEL_MIN_QUESTIONS = 6  # measured on an RTX 3050 Laptop GPU: the break-even of the two paths
+
+
+def model_dtype(device, configured=None):
+    """The precision to load the model in. The export is float16, which suits a GPU, but CPUs run float16 (and
+    bfloat16) matrix maths far slower: measured with 2 threads, one question took ~4.6 s in float16 and
+    ~0.87 s in float32, with the same answers. None keeps the exported dtype."""
+    if configured:
+        return configured
+    return None if str(device).startswith("cuda") else "float32"
 
 
 class ModelService:
@@ -40,21 +51,45 @@ class ModelService:
 
     @classmethod
     def load(cls, settings: Settings):
-        from dart.api import DART  # imported here so tests can run without the model stack
+        import torch  # imported here (with the model) so tests can run without the model stack
+        from dart.api import DART
 
         config = json.loads((settings.model_dir / "config.json").read_text(encoding="utf8"))
-        return cls(DART.from_pretrained(settings.model_dir, device=settings.device), config["version"])
+        device = settings.device or ("cuda" if torch.cuda.is_available() else "cpu")
+        dart = DART.from_pretrained(settings.model_dir, device=device, dtype=model_dtype(device, settings.dtype))
+        return cls(dart, config["version"])
 
     def warm_up(self):
         for _ in range(3):
             self.dart.decide("warm-up", ["a", "b"])
+            self.dart.decide_many("warm-up", [{"query": "a?", "options": ["a", "b"]},
+                                              {"query": "b?", "options": ["a", "b"]}])
 
-    def decide(self, query, options):
-        """Returns (PRD 5.1 payload, model latency in milliseconds)."""
+    @property
+    def parallel_min_questions(self):
+        """From how many questions the shared-context pass (dart.parallel) is used. It is not CUDA-graphed, so on
+        a GPU it costs a flat ~150 ms against ~25 ms per graphed question and only wins from
+        PARALLEL_MIN_QUESTIONS questions. Without graphs (CPU) it wins whenever there are two or more."""
+        return 2 if self.dart.graphs is None else PARALLEL_MIN_QUESTIONS
+
+    def use_parallel(self, context, count):
+        return bool(context) and count >= self.parallel_min_questions
+
+    def decide(self, context, questions):
+        """questions: [{"id", "query", "options"}, ...].
+
+        Returns (PRD 5.1 payload, model latency in milliseconds, whether the shared-context pass was used).
+        """
+        parallel = self.use_parallel(context, len(questions))
         with self._lock:
             start = time.perf_counter()
-            payload = self.dart.decide(query, options)
-            return payload, (time.perf_counter() - start) * 1000
+            if parallel:
+                payload = self.dart.decide_many(context, questions)
+            else:
+                singles = [self.dart.decide(q["query"], q["options"], context=context, question_id=q["id"])
+                           for q in questions]
+                payload = {**singles[0], "decisions": [s["decisions"][0] for s in singles]}
+            return payload, (time.perf_counter() - start) * 1000, parallel
 
 
 def create_app(settings=None, model=None, store=None, limiter=None):
@@ -99,29 +134,43 @@ def create_app(settings=None, model=None, store=None, limiter=None):
     async def health():
         current = app.state.model
         return HealthResponse(status="ok", model_loaded=True, device=str(current.device),
-                              model_version=current.version)
+                              model_version=current.version, parallel_min_questions=current.parallel_min_questions)
+
+    def parse_all(questions):
+        parsed = []
+        for number, question in enumerate(questions, start=1):
+            try:
+                parsed.append(parse_options(question.options))
+            except OptionsError as error:
+                prefix = f"Question {number}: " if len(questions) > 1 else ""
+                raise HTTPException(status_code=422, detail=f"{prefix}{error}") from error
+        return parsed
 
     @app.post("/api/decide", response_model=DecideResponse)
     async def decide(body: DecideRequest, request: Request):
         enforce_rate_limit(request)
+        parsed = parse_all(body.questions)
+        questions = [{"id": f"q{i + 1}", "query": q.query, "options": p.options}
+                     for i, (q, p) in enumerate(zip(body.questions, parsed))]
         try:
-            parsed = parse_options(body.options)
-        except OptionsError as error:
-            raise HTTPException(status_code=422, detail=str(error)) from error
-        try:
-            payload, latency_ms = await run_in_threadpool(app.state.model.decide, body.query, parsed.options)
+            payload, latency_ms, parallel = await run_in_threadpool(app.state.model.decide, body.context, questions)
         except ValueError as error:  # for example a prompt over the model's 256-token limit
             raise HTTPException(status_code=422, detail=str(error)) from error
-        decision = payload["decisions"][0]
-        decision_id = await save_safely({
-            "query": body.query, "options_input": body.options, "options": parsed.options,
-            "options_kind": parsed.kind, "decision": decision["decision"], "confidence": decision["confidence"],
-            "ranked": decision["ranked"], "latency_ms": round(latency_ms, 2),
-            "model_version": app.state.model.version,
-        })
-        return DecideResponse(id=decision_id, model=payload["model"], decisions=payload["decisions"],
-                              latency_ms=round(latency_ms, 2), options=parsed.options,
-                              options_kind=parsed.kind, stored=decision_id is not None)
+        latency_ms = round(latency_ms, 2)
+        group_id = uuid.uuid4().hex if len(questions) > 1 else ""
+        decisions = []
+        for question, options, decision in zip(body.questions, parsed, payload["decisions"]):
+            record_id = await save_safely({
+                "context": body.context, "query": question.query, "group_id": group_id,
+                "options_input": question.options, "options": options.options, "options_kind": options.kind,
+                "decision": decision["decision"], "confidence": decision["confidence"], "ranked": decision["ranked"],
+                "latency_ms": latency_ms, "model_version": app.state.model.version,
+            })
+            decisions.append({**decision, "options": options.options, "options_kind": options.kind,
+                              "record_id": record_id})
+        return DecideResponse(model=payload["model"], decisions=decisions, latency_ms=latency_ms,
+                              parallel=parallel,
+                              stored=all(d["record_id"] is not None for d in decisions))
 
     @app.post("/api/decisions/{decision_id}/feedback", response_model=FeedbackResponse)
     async def feedback(decision_id: str, body: FeedbackRequest):
